@@ -33,7 +33,18 @@ export function getTiles() {
   return pixelTiles
 }
 
-export function buyTile(tileId: string, buyerAddress: string) {
+export function buyTile(
+  tileId: string,
+  buyerAddress: string,
+  options?: {
+    imageIpfsUri?: string
+    imageGatewayUrl?: string
+    metadataIpfsUri?: string
+    metadataGatewayUrl?: string
+    twitterHandle?: string
+    twitterUrl?: string
+  }
+) {
   const tile = pixelTiles.find((item) => item.id === tileId)
 
   if (!tile) {
@@ -51,12 +62,22 @@ export function buyTile(tileId: string, buyerAddress: string) {
     premiumUsd: purchase.premiumUsd,
     previousOwnerPayoutUsd: purchase.previousOwnerPayoutUsd,
     platformRevenueUsd: purchase.platformRevenueUsd,
+    imageIpfsUri: options?.imageIpfsUri,
+    metadataIpfsUri: options?.metadataIpfsUri,
+    twitterHandle: options?.twitterHandle,
+    twitterUrl: options?.twitterUrl,
     createdAt: new Date().toISOString(),
   }
 
   tile.ownerAddress = buyerAddress
   tile.lastSalePriceUsd = purchase.requiredPaymentUsd
   tile.nextBuyoutPriceUsd = purchase.nextBuyoutPriceUsd
+  tile.imageIpfsUri = options?.imageIpfsUri
+  tile.imageGatewayUrl = options?.imageGatewayUrl
+  tile.metadataIpfsUri = options?.metadataIpfsUri
+  tile.metadataGatewayUrl = options?.metadataGatewayUrl
+  tile.twitterHandle = options?.twitterHandle
+  tile.twitterUrl = options?.twitterUrl
   tile.purchaseCount += 1
   tile.updatedAt = new Date().toISOString()
 

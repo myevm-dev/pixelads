@@ -15,6 +15,9 @@ export function PixelGrid() {
   const [selectedTile, setSelectedTile] = useState<PixelTile | null>(null)
   const [isBuying, setIsBuying] = useState(false)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [twitterHandle, setTwitterHandle] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
 
   async function loadTiles() {
     const response = await fetch("/api/tiles")
@@ -22,38 +25,83 @@ export function PixelGrid() {
     setTiles(data.tiles)
   }
 
-  async function buySelectedTile() {
+    async function buySelectedTile() {
     if (!selectedTile || !buyerAddress.trim()) return
 
     try {
-      setIsBuying(true)
+        setIsBuying(true)
+        setIsUploading(true)
 
-      const response = await fetch(`/api/tiles/${selectedTile.id}/buy`, {
+        let uploadData:
+        | {
+            imageIpfsUri: string
+            imageGatewayUrl: string
+            metadataIpfsUri: string
+            metadataGatewayUrl: string
+            metadata: {
+                external_url: string
+            }
+            }
+        | undefined
+
+        if (selectedImage) {
+        const formData = new FormData()
+        formData.append("image", selectedImage)
+        formData.append("tileId", selectedTile.id)
+        formData.append("buyerAddress", buyerAddress.trim())
+        formData.append("twitterHandle", twitterHandle.trim())
+
+        const uploadResponse = await fetch("/api/ipfs/upload", {
+            method: "POST",
+            body: formData,
+        })
+
+        uploadData = await uploadResponse.json()
+
+        if (!uploadResponse.ok) {
+            throw new Error(
+            (uploadData as { error?: string }).error || "Failed to upload to IPFS"
+            )
+        }
+        }
+
+        setIsUploading(false)
+
+        const response = await fetch(`/api/tiles/${selectedTile.id}/buy`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+            "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          buyerAddress: buyerAddress.trim(),
+            buyerAddress: buyerAddress.trim(),
+            imageIpfsUri: uploadData?.imageIpfsUri,
+            imageGatewayUrl: uploadData?.imageGatewayUrl,
+            metadataIpfsUri: uploadData?.metadataIpfsUri,
+            metadataGatewayUrl: uploadData?.metadataGatewayUrl,
+            twitterHandle: twitterHandle.trim().replace(/^@/, ""),
+            twitterUrl: twitterHandle.trim()
+            ? `https://x.com/${twitterHandle.trim().replace(/^@/, "")}`
+            : "",
         }),
-      })
+        })
 
-      const data = await response.json()
+        const data = await response.json()
 
-      if (!response.ok) {
+        if (!response.ok) {
         throw new Error(data.error || "Failed to buy tile")
-      }
+        }
 
-      await loadTiles()
-      setSelectedTile(data.tile)
+        await loadTiles()
+        setSelectedTile(data.tile)
+        setSelectedImage(null)
     } catch (error) {
-      console.error(error)
-      alert(error instanceof Error ? error.message : "Failed to buy tile")
+        console.error(error)
+        alert(error instanceof Error ? error.message : "Failed to buy tile")
     } finally {
-      setIsBuying(false)
+        setIsBuying(false)
+        setIsUploading(false)
     }
-  }
-
+    }
   useEffect(() => {
     loadTiles()
   }, [])
@@ -114,6 +162,68 @@ export function PixelGrid() {
             />
           </div>
         </div>
+        <div className="rounded-2xl bg-white/5 p-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                Tile image
+            </label>
+
+            <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                setSelectedImage(event.target.files?.[0] || null)
+                }}
+                className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1 file:text-xs file:font-bold file:text-black"
+            />
+
+            <p className="mt-2 text-xs text-white/40">
+                This image will be uploaded to IPFS and saved in the tile metadata.
+            </p>
+            </div>
+
+            <div className="rounded-2xl bg-white/5 p-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                X handle
+            </label>
+
+            <div className="mt-3 flex overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                <span className="flex items-center border-r border-white/10 px-3 text-sm text-white/40">
+                x.com/
+                </span>
+
+                <input
+                value={twitterHandle}
+                onChange={(event) => setTwitterHandle(event.target.value)}
+                placeholder="yourhandle"
+                className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
+                />
+            </div>
+            </div>
+
+            {selectedTile.imageGatewayUrl ? (
+            <div className="rounded-2xl bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+                Current image
+                </p>
+
+                <img
+                src={selectedTile.imageGatewayUrl}
+                alt={`Tile ${selectedTile.id}`}
+                className="mt-3 aspect-square w-full rounded-2xl object-cover"
+                />
+
+                {selectedTile.metadataGatewayUrl ? (
+                <a
+                    href={selectedTile.metadataGatewayUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 block text-xs font-semibold text-white/60 underline"
+                >
+                    View metadata
+                </a>
+                ) : null}
+            </div>
+            ) : null}
 
         <button
           onClick={buySelectedTile}
@@ -121,10 +231,12 @@ export function PixelGrid() {
           className="mt-5 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-black transition hover:bg-white/85 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isBuying
-            ? "Buying..."
+            ? isUploading
+                ? "Uploading to IPFS..."
+                : "Buying..."
             : selectedTile.ownerAddress
-              ? "Force Buy Tile"
-              : "Buy Tile"}
+                ? "Force Buy Tile"
+                : "Buy Tile"}
         </button>
       </div>
     )

@@ -6,6 +6,12 @@ export type PixelTile = {
   title: string
   targetUrl: string
   color: string
+  imageIpfsUri?: string
+  imageGatewayUrl?: string
+  metadataIpfsUri?: string
+  metadataGatewayUrl?: string
+  twitterHandle?: string
+  twitterUrl?: string
   purchaseCount: number
   updatedAt: string
 }
@@ -19,5 +25,9 @@ export type PixelPurchase = {
   premiumUsd: number
   previousOwnerPayoutUsd: number
   platformRevenueUsd: number
+  imageIpfsUri?: string
+  metadataIpfsUri?: string
+  twitterHandle?: string
+  twitterUrl?: string
   createdAt: string
 }

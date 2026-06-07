@@ -9,8 +9,15 @@ type RouteContext = {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { id } = await context.params
+
     const body = (await request.json()) as {
       buyerAddress?: string
+      imageIpfsUri?: string
+      imageGatewayUrl?: string
+      metadataIpfsUri?: string
+      metadataGatewayUrl?: string
+      twitterHandle?: string
+      twitterUrl?: string
     }
 
     if (!body.buyerAddress) {
@@ -20,7 +27,14 @@ export async function POST(request: Request, context: RouteContext) {
       )
     }
 
-    const result = buyTile(id, body.buyerAddress)
+    const result = buyTile(id, body.buyerAddress, {
+      imageIpfsUri: body.imageIpfsUri,
+      imageGatewayUrl: body.imageGatewayUrl,
+      metadataIpfsUri: body.metadataIpfsUri,
+      metadataGatewayUrl: body.metadataGatewayUrl,
+      twitterHandle: body.twitterHandle,
+      twitterUrl: body.twitterUrl,
+    })
 
     return Response.json(result)
   } catch (error) {

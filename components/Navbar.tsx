@@ -99,21 +99,21 @@ export function Navbar() {
             href="/"
             className="text-sm font-medium text-white/70 transition hover:text-white"
           >
-            Wall
+            WALL
           </Link>
 
           <Link
             href="/how-it-works"
             className="text-sm font-medium text-white/70 transition hover:text-white"
           >
-            How it works
+            WTF
           </Link>
 
           <Link
             href="/leaderboard"
             className="text-sm font-medium text-white/70 transition hover:text-white"
           >
-            Leaderboard
+            LEADERS
           </Link>
         </div>
 
