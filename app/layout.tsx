@@ -1,10 +1,11 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { Navbar } from "@/components/Navbar"
+import { AppProviders } from "@/components/AppProviders"
 
 export const metadata: Metadata = {
-  title: "PixelAds",
-  description: "An x402 pixel takeover marketplace template.",
+  title: "Dominance",
+  description: "An x402-powered territory game.",
 }
 
 export default function RootLayout({
@@ -13,10 +14,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-black text-white antialiased">
-        <Navbar />
-        <main>{children}</main>
+    <html lang="en" data-theme="dark">
+      <body className="min-h-screen bg-background text-foreground antialiased">
+        <AppProviders>
+          <Navbar />
+          <main>{children}</main>
+        </AppProviders>
       </body>
     </html>
   )

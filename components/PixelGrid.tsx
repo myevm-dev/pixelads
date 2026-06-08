@@ -9,6 +9,24 @@ function shortenAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
+type UploadData = {
+  imageIpfsUri: string
+  imageGatewayUrl: string
+  metadataIpfsUri: string
+  metadataGatewayUrl: string
+  metadata: {
+    external_url: string
+  }
+}
+
+type BuyTileResponse = {
+  tile: PixelTile
+}
+
+function cleanTwitterHandle(handle: string) {
+  return handle.trim().replace(/^@/, "")
+}
+
 export function PixelGrid() {
   const [tiles, setTiles] = useState<PixelTile[]>([])
   const [buyerAddress, setBuyerAddress] = useState("")
@@ -25,26 +43,16 @@ export function PixelGrid() {
     setTiles(data.tiles)
   }
 
-    async function buySelectedTile() {
+  async function buySelectedTile() {
     if (!selectedTile || !buyerAddress.trim()) return
 
     try {
-        setIsBuying(true)
-        setIsUploading(true)
+      setIsBuying(true)
+      setIsUploading(Boolean(selectedImage))
 
-        let uploadData:
-        | {
-            imageIpfsUri: string
-            imageGatewayUrl: string
-            metadataIpfsUri: string
-            metadataGatewayUrl: string
-            metadata: {
-                external_url: string
-            }
-            }
-        | undefined
+      let uploadData: UploadData | undefined
 
-        if (selectedImage) {
+      if (selectedImage) {
         const formData = new FormData()
         formData.append("image", selectedImage)
         formData.append("tileId", selectedTile.id)
@@ -52,56 +60,62 @@ export function PixelGrid() {
         formData.append("twitterHandle", twitterHandle.trim())
 
         const uploadResponse = await fetch("/api/ipfs/upload", {
-            method: "POST",
-            body: formData,
+          method: "POST",
+          body: formData,
         })
 
-        uploadData = await uploadResponse.json()
+        const uploadJson = await uploadResponse.json()
 
         if (!uploadResponse.ok) {
-            throw new Error(
-            (uploadData as { error?: string }).error || "Failed to upload to IPFS"
-            )
-        }
+          throw new Error(uploadJson.error || "Failed to upload to IPFS")
         }
 
-        setIsUploading(false)
+        uploadData = uploadJson as UploadData
+      }
 
-        const response = await fetch(`/api/tiles/${selectedTile.id}/buy`, {
+      setIsUploading(false)
+
+      const cleanHandle = cleanTwitterHandle(twitterHandle)
+
+      const response = await fetch(`/api/tiles/${selectedTile.id}/buy`, {
         method: "POST",
         headers: {
-            "Content-Type": "application/json",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            buyerAddress: buyerAddress.trim(),
-            imageIpfsUri: uploadData?.imageIpfsUri,
-            imageGatewayUrl: uploadData?.imageGatewayUrl,
-            metadataIpfsUri: uploadData?.metadataIpfsUri,
-            metadataGatewayUrl: uploadData?.metadataGatewayUrl,
-            twitterHandle: twitterHandle.trim().replace(/^@/, ""),
-            twitterUrl: twitterHandle.trim()
-            ? `https://x.com/${twitterHandle.trim().replace(/^@/, "")}`
-            : "",
+          buyerAddress: buyerAddress.trim(),
+          imageIpfsUri: uploadData?.imageIpfsUri,
+          imageGatewayUrl: uploadData?.imageGatewayUrl,
+          metadataIpfsUri: uploadData?.metadataIpfsUri,
+          metadataGatewayUrl: uploadData?.metadataGatewayUrl,
+          twitterHandle: cleanHandle,
+          twitterUrl: cleanHandle ? `https://x.com/${cleanHandle}` : "",
         }),
-        })
+      })
 
-        const data = await response.json()
+      const data = (await response.json()) as BuyTileResponse & {
+        error?: string
+      }
 
-        if (!response.ok) {
-        throw new Error(data.error || "Failed to buy tile")
-        }
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Payment required. The route is protected by x402, so the next step is adding a non-thirdweb x402 payment client."
+        )
+      }
 
-        await loadTiles()
-        setSelectedTile(data.tile)
-        setSelectedImage(null)
+      await loadTiles()
+      setSelectedTile(data.tile)
+      setSelectedImage(null)
     } catch (error) {
-        console.error(error)
-        alert(error instanceof Error ? error.message : "Failed to buy tile")
+      console.error(error)
+      alert(error instanceof Error ? error.message : "Failed to buy territory")
     } finally {
-        setIsBuying(false)
-        setIsUploading(false)
+      setIsBuying(false)
+      setIsUploading(false)
     }
-    }
+  }
+
   useEffect(() => {
     loadTiles()
   }, [])
@@ -110,7 +124,7 @@ export function PixelGrid() {
     if (!selectedTile) {
       return (
         <div className="flex h-full min-h-[calc(100dvh-120px)] items-center justify-center text-center text-sm text-white/40">
-          Select a tile to view price and ownership.
+          Select a territory to view price and ownership.
         </div>
       )
     }
@@ -118,7 +132,7 @@ export function PixelGrid() {
     return (
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-          Selected tile
+          Selected territory
         </p>
 
         <h2 className="mt-2 text-3xl font-black text-white">
@@ -127,7 +141,7 @@ export function PixelGrid() {
 
         <div className="mt-5 space-y-4 text-sm">
           <div className="rounded-2xl bg-white/5 p-4">
-            <p className="text-white/40">Owner</p>
+            <p className="text-white/40">Controller</p>
             <p className="mt-1 font-semibold text-white">
               {selectedTile.ownerAddress
                 ? shortenAddress(selectedTile.ownerAddress)
@@ -136,14 +150,14 @@ export function PixelGrid() {
           </div>
 
           <div className="rounded-2xl bg-white/5 p-4">
-            <p className="text-white/40">Price to buy</p>
+            <p className="text-white/40">Takeover cost</p>
             <p className="mt-1 text-2xl font-black text-white">
               ${selectedTile.nextBuyoutPriceUsd.toFixed(2)}
             </p>
           </div>
 
           <div className="rounded-2xl bg-white/5 p-4">
-            <p className="text-white/40">Times purchased</p>
+            <p className="text-white/40">Takeovers</p>
             <p className="mt-1 font-semibold text-white">
               {selectedTile.purchaseCount}
             </p>
@@ -161,69 +175,71 @@ export function PixelGrid() {
               className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/30"
             />
           </div>
-        </div>
-        <div className="rounded-2xl bg-white/5 p-4">
+
+          <div className="rounded-2xl bg-white/5 p-4">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-                Tile image
+              Faction banner
             </label>
 
             <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
                 setSelectedImage(event.target.files?.[0] || null)
-                }}
-                className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1 file:text-xs file:font-bold file:text-black"
+              }}
+              className="mt-3 w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-3 file:py-1 file:text-xs file:font-bold file:text-black"
             />
 
             <p className="mt-2 text-xs text-white/40">
-                This image will be uploaded to IPFS and saved in the tile metadata.
+              This banner will be uploaded to IPFS and saved in the territory
+              metadata.
             </p>
-            </div>
+          </div>
 
-            <div className="rounded-2xl bg-white/5 p-4">
+          <div className="rounded-2xl bg-white/5 p-4">
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-                X handle
+              X handle
             </label>
 
             <div className="mt-3 flex overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-                <span className="flex items-center border-r border-white/10 px-3 text-sm text-white/40">
+              <span className="flex items-center border-r border-white/10 px-3 text-sm text-white/40">
                 x.com/
-                </span>
+              </span>
 
-                <input
+              <input
                 value={twitterHandle}
                 onChange={(event) => setTwitterHandle(event.target.value)}
                 placeholder="yourhandle"
                 className="w-full bg-transparent px-4 py-3 text-sm text-white outline-none placeholder:text-white/30"
-                />
+              />
             </div>
-            </div>
+          </div>
 
-            {selectedTile.imageGatewayUrl ? (
+          {selectedTile.imageGatewayUrl ? (
             <div className="rounded-2xl bg-white/5 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
                 Current image
-                </p>
+              </p>
 
-                <img
+              <img
                 src={selectedTile.imageGatewayUrl}
-                alt={`Tile ${selectedTile.id}`}
+                alt={`Territory ${selectedTile.id}`}
                 className="mt-3 aspect-square w-full rounded-2xl object-cover"
-                />
+              />
 
-                {selectedTile.metadataGatewayUrl ? (
+              {selectedTile.metadataGatewayUrl ? (
                 <a
-                    href={selectedTile.metadataGatewayUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 block text-xs font-semibold text-white/60 underline"
+                  href={selectedTile.metadataGatewayUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 block text-xs font-semibold text-white/60 underline"
                 >
-                    View metadata
+                  View metadata
                 </a>
-                ) : null}
+              ) : null}
             </div>
-            ) : null}
+          ) : null}
+        </div>
 
         <button
           onClick={buySelectedTile}
@@ -232,11 +248,11 @@ export function PixelGrid() {
         >
           {isBuying
             ? isUploading
-                ? "Uploading to IPFS..."
-                : "Buying..."
+              ? "Uploading to IPFS..."
+              : "Processing claim..."
             : selectedTile.ownerAddress
-                ? "Force Buy Tile"
-                : "Buy Tile"}
+              ? "Dominate Territory"
+              : "Claim Territory"}
         </button>
       </div>
     )
@@ -246,19 +262,6 @@ export function PixelGrid() {
     <>
       <section className="w-full px-4 py-6 pb-40 lg:min-h-[calc(100dvh-69px)] lg:pl-[440px] lg:pr-6 lg:pb-6">
         <div className="min-h-[calc(100dvh-117px)] w-full overflow-x-auto rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-black text-white md:text-5xl">
-                PixelAds Wall
-              </h1>
-
-              <p className="mt-2 text-sm text-white/50 md:text-base">
-                6,000 fixed-position tiles. Buy open tiles for $2 or take over
-                owned tiles for 5% more.
-              </p>
-            </div>
-          </div>
-
           <div
             className="grid gap-1"
             style={{
@@ -282,8 +285,16 @@ export function PixelGrid() {
                     : "border-white/10 bg-white/5",
                   selectedTile?.id === tile.id ? "ring-2 ring-white" : "",
                 ].join(" ")}
-                title={`Tile ${tile.id}`}
-              />
+                title={`Territory ${tile.id}`}
+              >
+                {tile.imageGatewayUrl ? (
+                  <img
+                    src={tile.imageGatewayUrl}
+                    alt={`Territory ${tile.id}`}
+                    className="h-full w-full rounded-[inherit] object-cover"
+                  />
+                ) : null}
+              </button>
             ))}
           </div>
         </div>
@@ -305,13 +316,15 @@ export function PixelGrid() {
         >
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">
-              {selectedTile ? `Tile #${selectedTile.id}` : "Select a tile"}
+              {selectedTile
+                ? `Territory #${selectedTile.id}`
+                : "Select territory"}
             </p>
 
             <p className="mt-1 text-sm font-bold text-white">
               {selectedTile
                 ? `$${selectedTile.nextBuyoutPriceUsd.toFixed(2)}`
-                : "Tap a tile to buy or preview"}
+                : "Tap territory to claim or preview"}
             </p>
           </div>
 
